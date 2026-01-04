@@ -10,7 +10,7 @@ const Sidebar = () => {
       {/* Sidebar Logo */}
       <div className="logo-box">
         <Link to="/Dashboard" className="logo-dark my-2">
-          <h1>ModMan</h1>
+          <h1>ON STORE</h1>
         </Link>
       </div>
 

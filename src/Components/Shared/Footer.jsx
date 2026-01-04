@@ -7,7 +7,7 @@ const Footer = () => {
       <div className="container-fluid">
         <div className="row">
           <div className="col-12 text-center">
-            {new Date().getFullYear()} &copy; Modman. Crafted by{" "}
+            {new Date().getFullYear()} &copy; ON STORE. Crafted by{" "}
             <iconify-icon
               icon="iconamoon:heart-duotone"
               class="fs-18 align-middle text-danger"
@@ -15,7 +15,7 @@ const Footer = () => {
             <p
               className="fw-bold footer-text"
             >
-              TAT
+              ONSTORE
             </p>
           </div>
         </div>

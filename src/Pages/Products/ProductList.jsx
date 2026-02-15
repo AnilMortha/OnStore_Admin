@@ -1,173 +1,236 @@
 import React, { useEffect, useState } from "react";
-import "bootstrap/dist/css/bootstrap.min.css";
-// import httpClient from "../../Utils/httpClient";
 import { Link } from "react-router-dom";
-import Swal from "sweetalert2";
+import Breadcrumb from "../../Components/Shared/Breadcrumb";
 
 const ProductList = () => {
   const [products, setProducts] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [filteredData, setFilteredData] = useState([]);
+  const [search, setSearch] = useState("");
+  const [entries, setEntries] = useState(5);
+  const [currentPage, setCurrentPage] = useState(1);
 
+  /* ================= DUMMY DATA ================= */
   useEffect(() => {
-    fetchProducts();
+    const dummyProducts = [
+      {
+        id: 1,
+        productName: "Basmati Rice 5kg",
+        mrp: 550,
+        offerPrice: 480,
+        stock: 20,
+        weight: "5",
+        unit: "kg",
+        category: "Rice",
+        subCategory: "Basmati Rice",
+        images: ["https://via.placeholder.com/100"],
+      },
+      {
+        id: 2,
+        productName: "Sunflower Oil 1L",
+        mrp: 210,
+        offerPrice: 180,
+        stock: 15,
+        weight: "1",
+        unit: "litre",
+        category: "Oil",
+        subCategory: "Sunflower Oil",
+        images: ["https://via.placeholder.com/100"],
+      },
+      {
+        id: 3,
+        productName: "Toor Dal 2kg",
+        mrp: 320,
+        offerPrice: 290,
+        stock: 0,
+        weight: "2",
+        unit: "kg",
+        category: "Pulses",
+        subCategory: "Toor Dal",
+        images: ["https://via.placeholder.com/100"],
+      },
+    ];
+
+    setProducts(dummyProducts);
+    setFilteredData(dummyProducts);
   }, []);
 
-  const fetchProducts = async () => {
-    try {
-      const { data } = await httpClient.get("/products/getAllProducts");
-      if (data.success && Array.isArray(data.products)) {
-        setProducts(data.products);
-      } else {
-        console.log("Unexpected response:", data);
-      }
-    } catch (error) {
-      console.error("Error fetching products:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  /* ================= SEARCH ================= */
+  useEffect(() => {
+    const filtered = products.filter((item) =>
+      item.productName.toLowerCase().includes(search.toLowerCase()),
+    );
+    setFilteredData(filtered);
+    setCurrentPage(1);
+  }, [search, products]);
 
+  /* ================= DELETE (UI ONLY) ================= */
   const handleDelete = (id) => {
-    Swal.fire({
-      title: "Are you sure?",
-      text: "This product will be permanently deleted!",
-      icon: "warning",
-      showCancelButton: true,
-      confirmButtonText: "Yes, delete it!",
-      cancelButtonText: "Cancel",
-      reverseButtons: true,
-    }).then(async (result) => {
-      if (result.isConfirmed) {
-        try {
-          const { data } = await httpClient.delete(`/products/${id}`);
-          if (data.message === "Product deleted successfully") {
-            Swal.fire("Deleted!", "Product has been deleted.", "success");
-            fetchProducts();
-          } else {
-            Swal.fire("Error!", data.message || "Failed to delete.", "error");
-          }
-        } catch (err) {
-          Swal.fire("Error!", err.response?.data?.message || err.message, "error");
-        }
-      }
-    });
+    if (!window.confirm("Delete this product?")) return;
+    const updated = products.filter((item) => item.id !== id);
+    setProducts(updated);
+    setFilteredData(updated);
   };
 
-  if (loading) return <div className="text-center mt-5">Loading Products...</div>;
+  /* ================= PAGINATION ================= */
+  const indexOfLast = currentPage * entries;
+  const indexOfFirst = indexOfLast - entries;
+  const currentData = filteredData.slice(indexOfFirst, indexOfLast);
+  const totalPages = Math.ceil(filteredData.length / entries);
 
   return (
     <div className="page-content">
-      <div className="container-xxl">
-        <div className="row">
-          <div className="col-xl-12">
-            <div className="card shadow-sm">
-              <div className="card-header d-flex justify-content-between align-items-center">
-                <h4 className="card-title mb-0">Products List</h4>
-                <Link to="/AddProducts" className="btn btn-primary">
-                  + Add Product
-                </Link>
+      <div className="container-fluid py-4">
+        <Breadcrumb />
+
+        {/* Header */}
+        <div className="d-flex justify-content-between align-items-center mb-3">
+          <h4>Product List</h4>
+          <Link to="/AddProduct" className="btn btn-primary">
+            + Add Product
+          </Link>
+        </div>
+
+        <div className="card shadow-sm">
+          <div className="card-body">
+            {/* Controls */}
+            <div className="d-flex justify-content-between mb-3">
+              <div>
+                Show{" "}
+                <select
+                  value={entries}
+                  onChange={(e) => setEntries(Number(e.target.value))}
+                  className="form-select d-inline w-auto mx-2"
+                >
+                  <option value={5}>5</option>
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                </select>
+                entries
               </div>
 
-              <div className="table-responsive">
-                <table className="table table-striped align-middle table-hover">
-                  <thead className="table-light">
-                    <tr>
-                      <th>#</th>
-                      <th>Category</th>
-                      <th>Product Name</th>
-                      <th>Image</th>
-                      <th>Brand</th>
-                      <th>Gender</th>
-                      <th>Colors</th>
-                      <th>Stock</th>
-                      <th>Tag No</th>
-                      <th>Price</th>
-                      <th>Old Price</th>
-                      <th>Discount</th>
-                      <th>Tax</th>
-                      <th>Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {products.length > 0 ? (
-                      products.map((prod, index) => {
-                        // Get first image from first variant if available
-                        const firstImage =
-                          prod.variants?.[0]?.images?.[0]?.url || "/placeholder.jpg";
-
-                        // Get all color names
-                        const colorNames =
-                          prod.variants?.map((v) => v.colorName).join(", ") || "—";
-
-                        // Calculate total stock (sum of all stock quantities)
-                        const totalStock = prod.variants
-                          ?.reduce((sum, variant) => {
-                            return (
-                              sum +
-                              Object.values(variant.stock || {}).reduce(
-                                (a, b) => a + (Number(b) || 0),
-                                0
-                              )
-                            );
-                          }, 0)
-                          .toString();
-
-                        return (
-                          <tr key={prod._id}>
-                            <td>{index + 1}</td>
-                            <td>{prod.category?.Categoryname || "—"}</td>
-                            <td>{prod.productName || "—"}</td>
-                            <td>
-                              <img
-                                src={firstImage}
-                                alt={prod.productName}
-                                className="rounded"
-                                style={{
-                                  width: 70,
-                                  height: 70,
-                                  objectFit: "cover",
-                                  border: "1px solid #ddd",
-                                }}
-                              />
-                            </td>
-                            <td>{prod.brandName || "—"}</td>
-                            <td>{prod.gender || "—"}</td>
-                            <td>{colorNames}</td>
-                            <td>{totalStock || "0"}</td>
-                            <td>{prod.tagNumber || "—"}</td>
-                            <td>₹{prod.price || "—"}</td>
-                            <td>₹{prod.oldPrice || "—"}</td>
-                            <td>{prod.discount ? `${prod.discount}%` : "—"}</td>
-                            <td>{prod.tax ? `${prod.tax}%` : "—"}</td>
-                            <td>
-                              <div className="d-flex gap-2">
-                                <Link to={`/EditProduct/${prod._id}`}>
-                                  <button className="btn btn-outline-primary btn-sm">
-                                    Edit
-                                  </button>
-                                </Link>
-                                <button
-                                  className="btn btn-outline-danger btn-sm"
-                                  onClick={() => handleDelete(prod._id)}
-                                >
-                                  Delete
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })
-                    ) : (
-                      <tr>
-                        <td colSpan="14" className="text-center text-muted py-3">
-                          No products found.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+              <input
+                type="text"
+                placeholder="Search product..."
+                className="form-control w-25"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
             </div>
+
+            {currentData.length === 0 ? (
+              <p className="text-center text-muted">No products found</p>
+            ) : (
+              <>
+                <div className="table-responsive">
+                  <table className="table table-hover align-middle">
+                    <thead className="table-light">
+                      <tr>
+                        <th>#</th>
+                        <th>Image</th>
+                        <th>Grocery</th>
+                        <th>SubGrocery</th>
+                        <th>Product</th>
+                        <th>Brand</th>
+                        <th>Pricing</th>
+                        <th>Stock</th>
+                        <th>Weight</th>
+                        <th>GST</th>
+                        <th>Discount</th>
+                        <th>Featured</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      {currentData.map((item, index) => (
+                        <tr key={item.id}>
+                          <td>{indexOfFirst + index + 1}</td>
+                          
+                          <td>
+                            <img
+                              src={item.images[0]}
+                              alt=""
+                              style={{
+                                width: "50px",
+                                height: "50px",
+                                objectFit: "cover",
+                                borderRadius: "6px",
+                              }}
+                            />
+                          </td>
+                          <td>{item.category}</td>
+                          <td>{item.subCategory}</td>
+
+                          
+                          <td>{item.productName}</td>
+                          <td>₹{item.mrp}</td>
+                          <td>₹{item.offerPrice}</td>
+
+                          <td>
+                            <span
+                              className={`badge ${
+                                item.stock > 0 ? "bg-success" : "bg-danger"
+                              }`}
+                            >
+                              {item.stock}
+                            </span>
+                          </td>
+
+                          <td>
+                            {item.weight} {item.unit}
+                          </td>
+
+                          <td>{item.discount}</td>
+                          <td>{item.gst}</td>
+                          <td>{item.feature}</td>
+
+                          <td className={item.status === "Active" ? "text-success" : "text-danger"}>
+                            {item.status}
+                          </td>
+                          <td className="d-flex">
+                            <Link
+                              to={`/EditProduct/${item.id}`}
+                              className="btn btn-sm btn-warning me-2"
+                            >
+                              Edit
+                            </Link>
+
+                            <button
+                              onClick={() => handleDelete(item.id)}
+                              className="btn btn-sm btn-danger"
+                            >
+                              Delete
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Pagination */}
+                <div className="d-flex justify-content-end">
+                  <ul className="pagination mb-0">
+                    {[...Array(totalPages)].map((_, i) => (
+                      <li
+                        key={i}
+                        className={`page-item ${
+                          currentPage === i + 1 ? "active" : ""
+                        }`}
+                      >
+                        <button
+                          className="page-link"
+                          onClick={() => setCurrentPage(i + 1)}
+                        >
+                          {i + 1}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>

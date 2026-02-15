@@ -1,4 +1,5 @@
 import React from 'react';
+import Breadcrumb from '../Components/Shared/Breadcrumb';
 
 const Dashboard = () => {
   return (
@@ -6,6 +7,7 @@ const Dashboard = () => {
     <div className="page-content">
       {/* Start Container Fluid */}
       <div className="container-fluid">
+      <Breadcrumb/>
         {/* Start here.... */}
         <div className="row">
           <div className="col-xxl-12">

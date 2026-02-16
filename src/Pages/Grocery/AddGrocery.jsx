@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Breadcrumb from "../../Components/Shared/Breadcrumb";
-import httpClient from "../../Utils/httpClient";
+// import httpClient from "../../Utils/httpClient";
 
 const AddGrocery = () => {
   const navigate = useNavigate();

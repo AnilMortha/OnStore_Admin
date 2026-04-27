@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import httpClient from "../../Utils/httpClient";
 
 const AddProduct = () => {
   const navigate = useNavigate();
@@ -17,20 +18,18 @@ const AddProduct = () => {
 
   // Stock
   const [stock, setStock] = useState("");
-  const [lowStockAlert, setLowStockAlert] = useState("");
+  const [lowStockAlert, setLowStockAlert] = useState("5");
 
   // Product Details
   const [weight, setWeight] = useState("");
-  const [unit, setUnit] = useState("");
-  const [productType, setProductType] = useState("");
+  const [unit, setUnit] = useState("kg");
+  const [productType, setProductType] = useState("Veg");
 
-  // grocery
-  
+  // Category
   const [category, setCategory] = useState("");
   const [subCategory, setSubCategory] = useState("");
   const [categories, setCategories] = useState([]);
   const [subCategories, setSubCategories] = useState([]);
-
 
   // Extra
   const [expiryDate, setExpiryDate] = useState("");
@@ -42,336 +41,593 @@ const AddProduct = () => {
   const [images, setImages] = useState([]);
   const [previews, setPreviews] = useState([]);
 
+  const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
 
+  // Fetch categories on mount
   useEffect(() => {
-    setCategories([
-      { _id: "1", groceryname: "Rice" },
-      { _id: "2", groceryname: "Oil" }
-    ]);
+    fetchCategories();
   }, []);
 
-  const handlegroceryChange = (id) => {
-    setgrocery(id);
-    setSubCategories([
-      { _id: "10", Subgroceryname: "Basmati Rice" }
-    ]);
+  const fetchCategories = async () => {
+    try {
+      const response = await httpClient.get("/grocery/get_all.php");
+      if (response.data.status) {
+        setCategories(response.data.data);
+      }
+    } catch (error) {
+      console.error("Error fetching categories:", error);
+    }
+  };
+
+  const fetchSubCategories = async (categoryId) => {
+    try {
+      const response = await httpClient.get(`/subcategories/get_by_category.php?category_id=${categoryId}`);
+      if (response.data.status) {
+        setSubCategories(response.data.data);
+      } else {
+        setSubCategories([]);
+      }
+    } catch (error) {
+      console.error("Error fetching subcategories:", error);
+    }
   };
 
   const handleCategoryChange = (id) => {
     setCategory(id);
     setSubCategory("");
-
-    setSubCategories([
-      { _id: "10", SubCategoryname: "Basmati Rice" }
-    ]);
+    if (id) {
+      fetchSubCategories(id);
+    } else {
+      setSubCategories([]);
+    }
   };
 
   const handleImageChange = (e) => {
     const files = Array.from(e.target.files);
+    const totalImages = previews.length + files.length;
 
-    if (files.length < 3) {
-      setMessage("Minimum 3 images required ❌");
+    if (totalImages < 3) {
+      setMessage(`Minimum 3 images required. Currently: ${totalImages} ❌`);
       return;
     }
 
-    if (files.length > 5) {
-      setMessage("Maximum 5 images allowed ❌");
+    if (totalImages > 5) {
+      setMessage(`Maximum 5 images allowed. Currently: ${totalImages} ❌`);
       return;
     }
 
-    setImages(files);
-    setPreviews(files.map((file) => URL.createObjectURL(file)));
+    setImages([...images, ...files]);
+    const newPreviews = files.map((file) => URL.createObjectURL(file));
+    setPreviews([...previews, ...newPreviews]);
     setMessage("");
+    setFieldErrors({});
   };
 
-  const handleSubmit = (e) => {
+  const removeImage = (index) => {
+    const newImages = [...images];
+    const newPreviews = [...previews];
+    
+    newImages.splice(index, 1);
+    newPreviews.splice(index, 1);
+    
+    setImages(newImages);
+    setPreviews(newPreviews);
+    
+    if (newPreviews.length < 3) {
+      setMessage("Minimum 3 images required ❌");
+    }
+  };
+
+  const validateForm = () => {
+    const errors = {};
+
+    if (!productName.trim()) errors.productName = "Product name is required";
+    if (!description.trim()) errors.description = "Description is required";
+    if (!brand.trim()) errors.brand = "Brand is required";
+    if (!sku.trim()) errors.sku = "SKU is required";
+    if (!mrp || mrp <= 0) errors.mrp = "Valid MRP is required";
+    if (!offerPrice || offerPrice <= 0) errors.offerPrice = "Valid offer price is required";
+    if (!stock || stock < 0) errors.stock = "Valid stock is required";
+    if (!weight.trim()) errors.weight = "Weight is required";
+    if (!unit) errors.unit = "Unit is required";
+    if (!category) errors.category = "Category is required";
+    if (!subCategory) errors.subCategory = "Subcategory is required";
+    if (previews.length < 3) errors.images = "Minimum 3 images required";
+
+    setFieldErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (
-      !productName ||
-      !description ||
-      !brand ||
-      !sku ||
-      !mrp ||
-      !offerPrice ||
-      !stock ||
-      !weight ||
-      !unit ||
-      !categories ||
-      !subCategories
-    ) {
-      setMessage("All required fields must be filled ❌");
+    if (!validateForm()) {
+      setMessage("Please fill all required fields ❌");
       return;
     }
 
-    if (images.length < 3) {
-      setMessage("Minimum 3 images required ❌");
-      return;
+    setLoading(true);
+    setMessage("");
+
+    try {
+      const formData = new FormData();
+      
+      formData.append("productName", productName);
+      formData.append("description", description);
+      formData.append("brand", brand);
+      formData.append("sku", sku);
+      formData.append("mrp", mrp);
+      formData.append("offerPrice", offerPrice);
+      formData.append("gst", gst || 0);
+      formData.append("stock", stock);
+      formData.append("lowStockAlert", lowStockAlert);
+      formData.append("weight", weight);
+      formData.append("unit", unit);
+      formData.append("category", category);
+      formData.append("subCategory", subCategory);
+      formData.append("productType", productType);
+      formData.append("expiryDate", expiryDate);
+      formData.append("status", status);
+      formData.append("isFeatured", isFeatured ? 1 : 0);
+      formData.append("tags", tags);
+
+      // Append images
+     images.forEach((image) => {
+      formData.append("images", image);  // Changed from "images[]" to "images"
+    });
+
+    // Debug - check what's being sent
+    console.log("Sending images:", images.length);
+    for (let pair of formData.entries()) {
+      if (pair[0] === 'images') {
+        console.log("Image field:", pair[0], pair[1].name);
+      }
     }
 
-    const discount =
-      mrp && offerPrice
-        ? Math.round(((mrp - offerPrice) / mrp) * 100)
-        : 0;
+    const response = await httpClient.post("/products/add.php", formData, {
+      headers: { "Content-Type": "multipart/form-data" }
+    });
 
-    const newProduct = {
-      id: Date.now(),
-      productName,
-      description,
-      brand,
-      sku,
-      mrp,
-      offerPrice,
-      gst,
-      discount,
-      stock,
-      lowStockAlert,
-      weight,
-      unit,
-      productType,
-      categories,
-      subCategories,
-      status,
-      isFeatured,
-      tags: tags.split(","),
-      images: previews
-    };
-
-    const existingProducts =
-      JSON.parse(localStorage.getItem("products")) || [];
-
-    localStorage.setItem(
-      "products",
-      JSON.stringify([...existingProducts, newProduct])
-    );
-
-    setMessage("Product Added Successfully ✅");
-
-    setTimeout(() => navigate(-1), 1500);
-    
+      if (response.data.status) {
+        setMessage("Product Added Successfully ✅");
+        setTimeout(() => navigate("/ProductList"), 1500);
+      } else {
+        setMessage(response.data.message || "Failed to add product ❌");
+      }
+    } catch (err) {
+      console.error("Error:", err);
+      setMessage(err.response?.data?.message || "Server error ❌");
+    } finally {
+      setLoading(false);
+    }
   };
-   useEffect(() => {
-    setCategories([
-      { _id: "1", Categoryname: "Rice" },
-      { _id: "2", Categoryname: "Oil" }
-    ]);
-  }, []);
 
   return (
     <div className="page-content">
-    <div className="container-fluid py-4">
-      <div className="card shadow-sm">
-        <div className="card-header d-flex justify-content-between mb-3">
-          <h4>Add Product</h4>
-          <Link to="/ProductList">
-            <button
-              className="btn btn-secondary btn-sm"
-            >
-              ← Back
-            </button>
+      <div className="container-fluid py-4">
+        <div className="card shadow-sm">
+          <div className="card-header d-flex justify-content-between align-items-center bg-light">
+            <h4 className="mb-0">
+              <i className="fas fa-plus-circle me-2"></i>
+              Add New Product
+            </h4>
+            <Link to="/ProductList">
+              <button className="btn btn-outline-secondary btn-sm">
+                <i className="fas fa-arrow-left me-1"></i>
+                Back to List
+              </button>
             </Link>
-        </div>
+          </div>
 
-        <div className="card-body">
-          {message && <div className="alert alert-info">{message}</div>}
-
-          <form onSubmit={handleSubmit}>
-
-            {/* Category */}
-              <div className="mb-3">
-                <label className="form-label">Select Grocery *</label>
-                <select
-                  className={`form-select ${message.category && "is-invalid"}`}
-                  value={category}
-                  onChange={(e) => handleCategoryChange(e.target.value)}
-                >
-                  <option value="">-- Select Grocery --</option>
-                  {categories.map((cat) => (
-                    <option key={cat._id} value={cat._id}>
-                      {cat.Categoryname}
-                    </option>
-                  ))}
-                </select>
-                {message.category && (
-                  <div className="invalid-feedback">
-                    {message.category}
-                  </div>
-                )}
-              </div>
-
-              {/* Sub Category */}
-              <div className="mb-3">
-                <label className="form-label">Select Sub Grocery *</label>
-                <select
-                  className={`form-select ${message.subCategory && "is-invalid"}`}
-                  value={subCategory}
-                  onChange={(e) => setSubCategory(e.target.value)}
-                >
-                  <option value="">-- Select Sub Grocery --</option>
-                  {subCategories.map((sub) => (
-                    <option key={sub._id} value={sub._id}>
-                      {sub.SubCategoryname}
-                    </option>
-                  ))}
-                </select>
-                {message.subCategory && (
-                  <div className="invalid-feedback">
-                    {message.subCategory}
-                  </div>
-                )}
-              </div>
-
-            <div className="mb-3">
-              <label>Product Name *</label>
-              <input className="form-control"
-                value={productName}
-                onChange={(e) => setProductName(e.target.value)}
-              />
-            </div>
-
-            <div className="mb-3">
-              <label>Description *</label>
-              <textarea className="form-control"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-              />
-            </div>
-
-            <div className="row">
-              <div className="col-md-6 mb-3">
-                <label>Brand *</label>
-                <input className="form-control"
-                  value={brand}
-                  onChange={(e) => setBrand(e.target.value)}
-                />
-              </div>
-
-              <div className="col-md-6 mb-3">
-                <label>SKU *</label>
-                <input className="form-control"
-                  value={sku}
-                  onChange={(e) => setSku(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="row">
-              <div className="col-md-4 mb-3">
-                <label>MRP *</label>
-                <input type="number" className="form-control"
-                  value={mrp}
-                  onChange={(e) => setMrp(e.target.value)}
-                />
-              </div>
-
-              <div className="col-md-4 mb-3">
-                <label>Offer Price *</label>
-                <input type="number" className="form-control"
-                  value={offerPrice}
-                  onChange={(e) => setOfferPrice(e.target.value)}
-                />
-              </div>
-
-              <div className="col-md-4 mb-3">
-                <label>GST %</label>
-                <input type="number" className="form-control"
-                  value={gst}
-                  onChange={(e) => setGst(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="row">
-              <div className="col-md-6 mb-3">
-                <label>Stock *</label>
-                <input type="number" className="form-control"
-                  value={stock}
-                  onChange={(e) => setStock(e.target.value)}
-                />
-              </div>
-
-              <div className="col-md-6 mb-3">
-                <label>Low Stock Alert</label>
-                <input type="number" className="form-control"
-                  value={lowStockAlert}
-                  onChange={(e) => setLowStockAlert(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="row">
-              <div className="col-md-4 mb-3">
-                <label>Weight *</label>
-                <input className="form-control"
-                  value={weight}
-                  onChange={(e) => setWeight(e.target.value)}
-                />
-              </div>
-
-              <div className="col-md-4 mb-3">
-                <label>Unit *</label>
-                <select className="form-select"
-                  value={unit}
-                  onChange={(e) => setUnit(e.target.value)}
-                >
-                  <option value="">Select Unit</option>
-                  <option value="kg">kg</option>
-                  <option value="g">g</option>
-                  <option value="litre">litre</option>
-                  <option value="ml">ml</option>
-                  <option value="pieces">pieces</option>
-                  <option value="pack">pack</option>
-                </select>
-              </div>
-
-              {/* <div className="col-md-4 mb-3">
-                <label>Product Type</label>
-                <select className="form-select"
-                  value={productType}
-                  onChange={(e) => setProductType(e.target.value)}
-                >
-                  <option value="">Select</option>
-                  <option value="Veg">Veg</option>
-                  <option value="Non-Veg">Non-Veg</option>
-                </select>
-              </div> */}
-            </div>
-
-            <div className="mb-3">
-              <label>Upload Images (Min 3 - Max 5)</label>
-              <input type="file" multiple
-                className="form-control"
-                accept="image/*"
-                onChange={handleImageChange}
-              />
-            </div>
-
-            {previews.length > 0 && (
-              <div className="d-flex gap-2 flex-wrap mb-3">
-                {previews.map((img, index) => (
-                  <img key={index}
-                    src={img}
-                    alt="preview"
-                    style={{
-                      width: "100px",
-                      height: "100px",
-                      objectFit: "cover",
-                      borderRadius: "8px"
-                    }}
-                  />
-                ))}
+          <div className="card-body">
+            {message && (
+              <div className={`alert ${message.includes('✅') ? 'alert-success' : 'alert-danger'} alert-dismissible fade show`}>
+                {message}
+                <button type="button" className="btn-close" onClick={() => setMessage("")}></button>
               </div>
             )}
 
-            <button type="submit" className="btn btn-primary">
-              Add Product
-            </button>
+            <form onSubmit={handleSubmit}>
+              <div className="row">
+                {/* Left Column */}
+                <div className="col-md-8">
+                  {/* Category Selection */}
+                  <div className="row">
+                    <div className="col-md-6 mb-3">
+                      <label className="form-label fw-bold">
+                        Category <span className="text-danger">*</span>
+                      </label>
+                      <select
+                        className={`form-select ${fieldErrors.category ? 'is-invalid' : ''}`}
+                        value={category}
+                        onChange={(e) => handleCategoryChange(e.target.value)}
+                      >
+                        <option value="">-- Select Category --</option>
+                        {categories.map((cat) => (
+                          <option key={cat._id} value={cat._id}>
+                            {cat.Categoryname}
+                          </option>
+                        ))}
+                      </select>
+                      {fieldErrors.category && (
+                        <div className="invalid-feedback">{fieldErrors.category}</div>
+                      )}
+                    </div>
 
-          </form>
+                    <div className="col-md-6 mb-3">
+                      <label className="form-label fw-bold">
+                        Sub Category <span className="text-danger">*</span>
+                      </label>
+                      <select
+                        className={`form-select ${fieldErrors.subCategory ? 'is-invalid' : ''}`}
+                        value={subCategory}
+                        onChange={(e) => setSubCategory(e.target.value)}
+                        disabled={!category}
+                      >
+                        <option value="">-- Select Sub Category --</option>
+                        {subCategories.map((sub) => (
+                          <option key={sub._id} value={sub._id}>
+                            {sub.SubCategoryname}
+                          </option>
+                        ))}
+                      </select>
+                      {fieldErrors.subCategory && (
+                        <div className="invalid-feedback">{fieldErrors.subCategory}</div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Product Name */}
+                  <div className="mb-3">
+                    <label className="form-label fw-bold">
+                      Product Name <span className="text-danger">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      className={`form-control ${fieldErrors.productName ? 'is-invalid' : ''}`}
+                      value={productName}
+                      onChange={(e) => setProductName(e.target.value)}
+                      placeholder="Enter product name"
+                    />
+                    {fieldErrors.productName && (
+                      <div className="invalid-feedback">{fieldErrors.productName}</div>
+                    )}
+                  </div>
+
+                  {/* Description */}
+                  <div className="mb-3">
+                    <label className="form-label fw-bold">
+                      Description <span className="text-danger">*</span>
+                    </label>
+                    <textarea
+                      className={`form-control ${fieldErrors.description ? 'is-invalid' : ''}`}
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      rows="3"
+                      placeholder="Enter product description"
+                    />
+                    {fieldErrors.description && (
+                      <div className="invalid-feedback">{fieldErrors.description}</div>
+                    )}
+                  </div>
+
+                  {/* Brand and SKU */}
+                  <div className="row">
+                    <div className="col-md-6 mb-3">
+                      <label className="form-label fw-bold">
+                        Brand <span className="text-danger">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        className={`form-control ${fieldErrors.brand ? 'is-invalid' : ''}`}
+                        value={brand}
+                        onChange={(e) => setBrand(e.target.value)}
+                        placeholder="Enter brand name"
+                      />
+                      {fieldErrors.brand && (
+                        <div className="invalid-feedback">{fieldErrors.brand}</div>
+                      )}
+                    </div>
+
+                    <div className="col-md-6 mb-3">
+                      <label className="form-label fw-bold">
+                        SKU <span className="text-danger">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        className={`form-control ${fieldErrors.sku ? 'is-invalid' : ''}`}
+                        value={sku}
+                        onChange={(e) => setSku(e.target.value)}
+                        placeholder="Enter SKU (unique)"
+                      />
+                      {fieldErrors.sku && (
+                        <div className="invalid-feedback">{fieldErrors.sku}</div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Pricing */}
+                  <div className="row">
+                    <div className="col-md-4 mb-3">
+                      <label className="form-label fw-bold">
+                        MRP (₹) <span className="text-danger">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        className={`form-control ${fieldErrors.mrp ? 'is-invalid' : ''}`}
+                        value={mrp}
+                        onChange={(e) => setMrp(e.target.value)}
+                        min="0"
+                        step="0.01"
+                        placeholder="0.00"
+                      />
+                      {fieldErrors.mrp && (
+                        <div className="invalid-feedback">{fieldErrors.mrp}</div>
+                      )}
+                    </div>
+
+                    <div className="col-md-4 mb-3">
+                      <label className="form-label fw-bold">
+                        Offer Price (₹) <span className="text-danger">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        className={`form-control ${fieldErrors.offerPrice ? 'is-invalid' : ''}`}
+                        value={offerPrice}
+                        onChange={(e) => setOfferPrice(e.target.value)}
+                        min="0"
+                        step="0.01"
+                        placeholder="0.00"
+                      />
+                      {fieldErrors.offerPrice && (
+                        <div className="invalid-feedback">{fieldErrors.offerPrice}</div>
+                      )}
+                    </div>
+
+                    <div className="col-md-4 mb-3">
+                      <label className="form-label fw-bold">GST (%)</label>
+                      <input
+                        type="number"
+                        className="form-control"
+                        value={gst}
+                        onChange={(e) => setGst(e.target.value)}
+                        min="0"
+                        max="100"
+                        step="0.01"
+                        placeholder="0.00"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Stock */}
+                  <div className="row">
+                    <div className="col-md-6 mb-3">
+                      <label className="form-label fw-bold">
+                        Stock <span className="text-danger">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        className={`form-control ${fieldErrors.stock ? 'is-invalid' : ''}`}
+                        value={stock}
+                        onChange={(e) => setStock(e.target.value)}
+                        min="0"
+                        placeholder="0"
+                      />
+                      {fieldErrors.stock && (
+                        <div className="invalid-feedback">{fieldErrors.stock}</div>
+                      )}
+                    </div>
+
+                    <div className="col-md-6 mb-3">
+                      <label className="form-label fw-bold">Low Stock Alert</label>
+                      <input
+                        type="number"
+                        className="form-control"
+                        value={lowStockAlert}
+                        onChange={(e) => setLowStockAlert(e.target.value)}
+                        min="0"
+                        placeholder="5"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Weight and Unit */}
+                  <div className="row">
+                    <div className="col-md-6 mb-3">
+                      <label className="form-label fw-bold">
+                        Weight <span className="text-danger">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        className={`form-control ${fieldErrors.weight ? 'is-invalid' : ''}`}
+                        value={weight}
+                        onChange={(e) => setWeight(e.target.value)}
+                        placeholder="e.g., 500, 1, 2"
+                      />
+                      {fieldErrors.weight && (
+                        <div className="invalid-feedback">{fieldErrors.weight}</div>
+                      )}
+                    </div>
+
+                    <div className="col-md-6 mb-3">
+                      <label className="form-label fw-bold">
+                        Unit <span className="text-danger">*</span>
+                      </label>
+                      <select
+                        className={`form-select ${fieldErrors.unit ? 'is-invalid' : ''}`}
+                        value={unit}
+                        onChange={(e) => setUnit(e.target.value)}
+                      >
+                        <option value="kg">kg</option>
+                        <option value="g">g</option>
+                        <option value="litre">litre</option>
+                        <option value="ml">ml</option>
+                        <option value="pieces">pieces</option>
+                        <option value="pack">pack</option>
+                      </select>
+                      {fieldErrors.unit && (
+                        <div className="invalid-feedback">{fieldErrors.unit}</div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Product Type and Expiry */}
+                  <div className="row">
+                    <div className="col-md-6 mb-3">
+                      <label className="form-label fw-bold">Product Type</label>
+                      <select
+                        className="form-select"
+                        value={productType}
+                        onChange={(e) => setProductType(e.target.value)}
+                      >
+                        <option value="Veg">Veg</option>
+                        <option value="Non-Veg">Non-Veg</option>
+                      </select>
+                    </div>
+
+                    <div className="col-md-6 mb-3">
+                      <label className="form-label fw-bold">Expiry Date</label>
+                      <input
+                        type="date"
+                        className="form-control"
+                        value={expiryDate}
+                        onChange={(e) => setExpiryDate(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Tags */}
+                  <div className="mb-3">
+                    <label className="form-label fw-bold">Tags</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={tags}
+                      onChange={(e) => setTags(e.target.value)}
+                      placeholder="Enter tags separated by commas"
+                    />
+                    <small className="text-muted">e.g., organic, fresh, premium</small>
+                  </div>
+                </div>
+
+                {/* Right Column */}
+                <div className="col-md-4">
+                  {/* Images */}
+                  <div className="card mb-3">
+                    <div className="card-header bg-light">
+                      <h6 className="mb-0">
+                        Product Images <span className="text-danger">*</span>
+                        <small className="text-muted ms-2">(Min 3, Max 5)</small>
+                      </h6>
+                    </div>
+                    <div className="card-body">
+                      <input
+                        type="file"
+                        multiple
+                        className={`form-control ${fieldErrors.images ? 'is-invalid' : ''}`}
+                        accept="image/jpeg,image/png,image/webp"
+                        onChange={handleImageChange}
+                      />
+                      {fieldErrors.images && (
+                        <div className="invalid-feedback">{fieldErrors.images}</div>
+                      )}
+
+                      {previews.length > 0 && (
+                        <div className="d-flex flex-wrap gap-2 mt-3">
+                          {previews.map((img, index) => (
+                            <div key={index} className="position-relative">
+                              <img
+                                src={img}
+                                alt={`preview ${index + 1}`}
+                                style={{
+                                  width: "80px",
+                                  height: "80px",
+                                  objectFit: "cover",
+                                  borderRadius: "6px",
+                                  border: "1px solid #ddd"
+                                }}
+                              />
+                              <button
+                                type="button"
+                                className="btn btn-danger btn-sm position-absolute top-0 end-0"
+                                onClick={() => removeImage(index)}
+                                style={{ borderRadius: "50%", padding: "0 6px" }}
+                              >
+                                ×
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <small className="text-muted d-block mt-2">
+                        Selected: {previews.length} images
+                      </small>
+                    </div>
+                  </div>
+
+                  {/* Status and Featured */}
+                  <div className="card mb-3">
+                    <div className="card-header bg-light">
+                      <h6 className="mb-0">Settings</h6>
+                    </div>
+                    <div className="card-body">
+                      <div className="mb-3">
+                        <label className="form-label fw-bold">Status</label>
+                        <select
+                          className="form-select"
+                          value={status}
+                          onChange={(e) => setStatus(e.target.value)}
+                        >
+                          <option value="active">Active</option>
+                          <option value="inactive">Inactive</option>
+                        </select>
+                      </div>
+
+                      <div className="mb-3">
+                        <div className="form-check form-switch">
+                          <input
+                            className="form-check-input"
+                            type="checkbox"
+                            id="featuredSwitch"
+                            checked={isFeatured}
+                            onChange={(e) => setIsFeatured(e.target.checked)}
+                          />
+                          <label className="form-check-label fw-bold" htmlFor="featuredSwitch">
+                            Featured Product
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Submit Button */}
+              <div className="text-end mt-3">
+                <button
+                  type="submit"
+                  className="btn btn-primary px-4"
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm me-1"></span>
+                      Adding...
+                    </>
+                  ) : (
+                    <>
+                      <i className="fas fa-save me-1"></i>
+                      Add Product
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       </div>
-    </div>
     </div>
   );
 };

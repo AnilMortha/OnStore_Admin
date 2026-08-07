@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import Breadcrumb from "../../Components/Shared/Breadcrumb";
 import httpClient from "../../Utils/httpClient";
+import ImageHandler from "../../Utils/ImageHandlerproduct";
 
 const ProductList = () => {
   const [products, setProducts] = useState([]);
@@ -64,10 +65,16 @@ const ProductList = () => {
     }
   };
 
-  const getImageUrl = (imagePath) => {
-    if (!imagePath) return "https://via.placeholder.com/100?text=No+Image";
-    if (imagePath.startsWith("http")) return imagePath;
-    return `https://easternbaysolar.com/onstores_apis/api/${imagePath}`;
+  // Helper to get first image from array or string
+  const getFirstImage = (images) => {
+    if (!images) return null;
+    if (Array.isArray(images) && images.length > 0) {
+      return images[0];
+    }
+    if (typeof images === 'string') {
+      return images;
+    }
+    return null;
   };
 
   // Pagination
@@ -163,109 +170,120 @@ const ProductList = () => {
                     </thead>
 
                     <tbody>
-                      {currentData.map((item, index) => (
-                        <tr key={item.id}>
-                          <td>{indexOfFirst + index + 1}</td>
+                      {currentData.map((item, index) => {
+                        const firstImage = getFirstImage(item.images);
+                        
+                        return (
+                          <tr key={item.id}>
+                            <td>{indexOfFirst + index + 1}</td>
 
-                          <td>
-                            <img
-                              src={getImageUrl(item.images?.[0])}
-                              alt={item.productName}
-                              style={{
-                                width: "50px",
-                                height: "50px",
-                                objectFit: "cover",
-                                borderRadius: "6px",
-                                border: "1px solid #ddd"
-                              }}
-                              onError={(e) => {
-                                e.target.src = "https://via.placeholder.com/50?text=Error";
-                              }}
-                            />
-                          </td>
+                            <td>
+                              {firstImage ? (
+                                <ImageHandler
+                                  src={firstImage}
+                                  alt={item.productName}
+                                  width={50}
+                                  height={50}
+                                  className="border"
+                                />
+                              ) : (
+                                <img
+                                  src="https://via.placeholder.com/50?text=No+Image"
+                                  alt="No image"
+                                  style={{
+                                    width: "50px",
+                                    height: "50px",
+                                    objectFit: "cover",
+                                    borderRadius: "6px",
+                                    border: "1px solid #ddd"
+                                  }}
+                                />
+                              )}
+                            </td>
 
-                          <td>
-                            <span className="badge bg-info">
-                              {item.category || 'N/A'}
-                            </span>
-                          </td>
+                            <td>
+                              <span className="badge bg-info">
+                                {item.category || 'N/A'}
+                              </span>
+                            </td>
 
-                          <td>
-                            <span className="badge bg-secondary">
-                              {item.subCategory || 'N/A'}
-                            </span>
-                          </td>
+                            <td>
+                              <span className="badge bg-secondary">
+                                {item.subCategory || 'N/A'}
+                              </span>
+                            </td>
 
-                          <td>
-                            <strong>{item.productName}</strong>
-                            <br />
-                            <small className="text-muted">SKU: {item.sku}</small>
-                          </td>
+                            <td>
+                              <strong>{item.productName}</strong>
+                              <br />
+                              <small className="text-muted">SKU: {item.sku}</small>
+                            </td>
 
-                          <td>
-                            <span className="text-decoration-line-through text-muted">
-                              ₹{item.mrp}
-                            </span>
-                          </td>
+                            <td>
+                              <span className="text-decoration-line-through text-muted">
+                                ₹{item.mrp}
+                              </span>
+                            </td>
 
-                          <td>
-                            <span className="fw-bold text-success">
-                              ₹{item.offerPrice}
-                            </span>
-                          </td>
+                            <td>
+                              <span className="fw-bold text-success">
+                                ₹{item.offerPrice}
+                              </span>
+                            </td>
 
-                          <td>
-                            <span
-                              className={`badge ${
-                                item.stock > 0 
-                                  ? item.stock <= (item.lowStockAlert || 5)
-                                    ? 'bg-warning text-dark'
-                                    : 'bg-success'
-                                  : 'bg-danger'
-                              }`}
-                            >
-                              {item.stock > 0 ? item.stock : 'Out of Stock'}
-                            </span>
-                          </td>
+                            <td>
+                              <span
+                                className={`badge ${
+                                  item.stock > 0 
+                                    ? item.stock <= (item.lowStockAlert || 5)
+                                      ? 'bg-warning text-dark'
+                                      : 'bg-success'
+                                    : 'bg-danger'
+                                }`}
+                              >
+                                {item.stock > 0 ? item.stock : 'Out of Stock'}
+                              </span>
+                            </td>
 
-                          <td>
-                            {item.weight} {item.unit}
-                          </td>
+                            <td>
+                              {item.weight} {item.unit}
+                            </td>
 
-                          <td>
-                            <span className="badge bg-primary">
-                              {item.discount || 0}%
-                            </span>
-                          </td>
+                            <td>
+                              <span className="badge bg-primary">
+                                {item.discount || 0}%
+                              </span>
+                            </td>
 
-                          <td>
-                            <span className={`badge ${item.status === 'active' ? 'bg-success' : 'bg-secondary'}`}>
-                              {item.status}
-                            </span>
-                            {item.isFeatured === 1 && (
-                              <i className="fas fa-star text-warning ms-1" title="Featured"></i>
-                            )}
-                          </td>
+                            <td>
+                              <span className={`badge ${item.status === 'active' ? 'bg-success' : 'bg-secondary'}`}>
+                                {item.status}
+                              </span>
+                              {item.isFeatured === 1 && (
+                                <i className="fas fa-star text-warning ms-1" title="Featured"></i>
+                              )}
+                            </td>
 
-                          <td>
-                            <Link
-                              to={`/EditProduct/${item.id}`}
-                              className="btn btn-sm btn-warning me-2"
-                              title="Edit"
-                            >
-                              <i className="fas fa-edit"></i>
-                            </Link>
+                            <td>
+                              <Link
+                                to={`/EditProduct/${item.id}`}
+                                className="btn btn-sm btn-warning me-2"
+                                title="Edit"
+                              >
+                                <i className="fas fa-edit"></i>
+                              </Link>
 
-                            <button
-                              onClick={() => handleDelete(item.id)}
-                              className="btn btn-sm btn-danger"
-                              title="Delete"
-                            >
-                              <i className="fas fa-trash"></i>
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
+                              <button
+                                onClick={() => handleDelete(item.id)}
+                                className="btn btn-sm btn-danger"
+                                title="Delete"
+                              >
+                                <i className="fas fa-trash"></i>
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

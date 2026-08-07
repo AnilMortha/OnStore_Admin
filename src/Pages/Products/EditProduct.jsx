@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import httpClient from "../../Utils/httpClient";
+import ImageHandler from "../../Utils/ImageHandlerproduct";
 
 const EditProduct = () => {
   const { id } = useParams();
@@ -44,7 +45,7 @@ const EditProduct = () => {
   const [previews, setPreviews] = useState([]);
   const [imagesToKeep, setImagesToKeep] = useState([]);
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [fetchLoading, setFetchLoading] = useState(true);
   const [message, setMessage] = useState("");
   const [fieldErrors, setFieldErrors] = useState({});
@@ -57,7 +58,7 @@ const EditProduct = () => {
 
   const fetchCategories = async () => {
     try {
-      const response = await httpClient.get("/categories/get_all.php");
+      const response = await httpClient.get("/grocery/get_all.php");
       if (response.data.status) {
         setCategories(response.data.data);
       }
@@ -71,6 +72,8 @@ const EditProduct = () => {
       const response = await httpClient.get(`/subcategories/get_by_category.php?category_id=${categoryId}`);
       if (response.data.status) {
         setSubCategories(response.data.data);
+      } else {
+        setSubCategories([]);
       }
     } catch (error) {
       console.error("Error fetching subcategories:", error);
@@ -105,14 +108,36 @@ const EditProduct = () => {
         setIsFeatured(data.isFeatured === 1);
         setTags(data.tags || "");
         
-        // Set images
-        if (data.images && data.images.length > 0) {
-          const imageUrls = data.images.map(img => 
-            img.startsWith('http') ? img : `http://localhost/your-project/${img}`
-          );
-          setExistingImages(data.images);
-          setPreviews(imageUrls);
-          setImagesToKeep(data.images);
+        // Set images - handle both string and array formats
+        let imageArray = [];
+        if (typeof data.images === 'string') {
+          try {
+            // Clean the string - remove backslashes
+            const cleanString = data.images.replace(/\\/g, '');
+            imageArray = JSON.parse(cleanString);
+          } catch (e) {
+            imageArray = [data.images];
+          }
+        } else if (Array.isArray(data.images)) {
+          imageArray = data.images;
+        }
+        
+        console.log("Images from API:", imageArray);
+        
+        if (imageArray.length > 0) {
+          // Remove 'api/' from paths if present
+          const cleanedImages = imageArray.map(img => {
+            if (typeof img === 'string') {
+              return img.replace(/^api\//, '');
+            }
+            return img;
+          });
+          
+          console.log("Cleaned Images:", cleanedImages);
+          
+          setExistingImages(cleanedImages);
+          setPreviews(cleanedImages); // ImageHandler will handle the URL
+          setImagesToKeep(cleanedImages);
         }
         
         // Fetch subcategories for this category
@@ -128,15 +153,14 @@ const EditProduct = () => {
       setMessage("Error loading product data ❌");
     } finally {
       setFetchLoading(false);
-      setLoading(false);
     }
   };
 
-  const handleCategoryChange = async (id) => {
-    setCategory(id);
+  const handleCategoryChange = async (categoryId) => {
+    setCategory(categoryId);
     setSubCategory("");
-    if (id) {
-      await fetchSubCategories(id);
+    if (categoryId) {
+      await fetchSubCategories(categoryId);
     } else {
       setSubCategories([]);
     }
@@ -144,22 +168,33 @@ const EditProduct = () => {
 
   const handleImageChange = (e) => {
     const files = Array.from(e.target.files);
+    
+    // Check total images (existing + new)
     const totalImages = previews.length + files.length;
-
-    if (totalImages < 3) {
-      setMessage(`Minimum 3 images required. Currently: ${totalImages} ❌`);
+    
+    // Check minimum 1 image
+    if (totalImages < 1) {
+      setMessage(`Minimum 1 image required. Currently selected: ${totalImages} ❌`);
+      setFieldErrors({ ...fieldErrors, images: "Minimum 1 image required" });
+      e.target.value = "";
       return;
     }
-
+    
+    // Check maximum 5 images
     if (totalImages > 5) {
-      setMessage(`Maximum 5 images allowed. Currently: ${totalImages} ❌`);
+      setMessage(`Maximum 5 images allowed. Currently selected: ${totalImages} ❌`);
+      setFieldErrors({ ...fieldErrors, images: "Maximum 5 images allowed" });
+      e.target.value = "";
       return;
     }
 
+    // Add new images
     setImages([...images, ...files]);
     const newPreviews = files.map((file) => URL.createObjectURL(file));
     setPreviews([...previews, ...newPreviews]);
     setMessage("");
+    setFieldErrors({ ...fieldErrors, images: "" });
+    e.target.value = "";
   };
 
   const removeImage = (index) => {
@@ -182,8 +217,13 @@ const EditProduct = () => {
     newPreviews.splice(index, 1);
     setPreviews(newPreviews);
     
-    if (newPreviews.length < 3) {
-      setMessage("Minimum 3 images required ❌");
+    // Update validation message
+    if (newPreviews.length < 1) {
+      setMessage(`Minimum 1 image required. Currently: ${newPreviews.length} ❌`);
+      setFieldErrors({ ...fieldErrors, images: "Minimum 1 image required" });
+    } else {
+      setMessage("");
+      setFieldErrors({ ...fieldErrors, images: "" });
     }
   };
 
@@ -200,7 +240,7 @@ const EditProduct = () => {
     if (!unit) errors.unit = "Unit is required";
     if (!category) errors.category = "Category is required";
     if (!subCategory) errors.subCategory = "Subcategory is required";
-    if (previews.length < 3) errors.images = "Minimum 3 images required";
+    if (previews.length < 1) errors.images = "Minimum 1 image required";
 
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
@@ -220,6 +260,7 @@ const EditProduct = () => {
     try {
       const formData = new FormData();
       
+      // Append all text fields
       formData.append("id", id);
       formData.append("productName", productName);
       formData.append("description", description);
@@ -241,10 +282,16 @@ const EditProduct = () => {
       formData.append("tags", tags);
       formData.append("keep_images", JSON.stringify(imagesToKeep));
 
-      // Append new images
+      // Append new images with 'images[]' key
       images.forEach((image) => {
         formData.append("images[]", image);
       });
+
+      // Debug
+      console.log("=== Update Form Data ===");
+      console.log("Images to keep:", imagesToKeep);
+      console.log("New images:", images.length);
+      console.log("Total images:", previews.length);
 
       const response = await httpClient.post("/products/edit.php", formData, {
         headers: { "Content-Type": "multipart/form-data" }
@@ -304,7 +351,7 @@ const EditProduct = () => {
 
             <form onSubmit={handleSubmit}>
               <div className="row">
-                {/* Left Column - Same as AddProduct */}
+                {/* Left Column */}
                 <div className="col-md-8">
                   {/* Category Selection */}
                   <div className="row">
@@ -568,6 +615,7 @@ const EditProduct = () => {
                       onChange={(e) => setTags(e.target.value)}
                       placeholder="Enter tags separated by commas"
                     />
+                    <small className="text-muted">e.g., organic, fresh, premium</small>
                   </div>
                 </div>
 
@@ -578,7 +626,7 @@ const EditProduct = () => {
                     <div className="card-header bg-light">
                       <h6 className="mb-0">
                         Product Images <span className="text-danger">*</span>
-                        <small className="text-muted ms-2">(Min 3, Max 5)</small>
+                        <small className="text-muted ms-2">(Min 1, Max 5)</small>
                       </h6>
                     </div>
                     <div className="card-body">
@@ -595,33 +643,48 @@ const EditProduct = () => {
 
                       {previews.length > 0 && (
                         <div className="d-flex flex-wrap gap-2 mt-3">
-                          {previews.map((img, index) => (
-                            <div key={index} className="position-relative">
-                              <img
-                                src={img}
-                                alt={`preview ${index + 1}`}
-                                style={{
-                                  width: "80px",
-                                  height: "80px",
-                                  objectFit: "cover",
-                                  borderRadius: "6px",
-                                  border: "1px solid #ddd"
-                                }}
-                              />
-                              <button
-                                type="button"
-                                className="btn btn-danger btn-sm position-absolute top-0 end-0"
-                                onClick={() => removeImage(index)}
-                                style={{ borderRadius: "50%", padding: "0 6px" }}
-                              >
-                                ×
-                              </button>
-                            </div>
-                          ))}
+                          {previews.map((img, index) => {
+                            // Check if it's a new upload (blob URL) or existing image
+                            const isNewUpload = img && (img.startsWith('blob:') || img.startsWith('data:'));
+                            
+                            return (
+                              <div key={index} className="position-relative">
+                                {isNewUpload ? (
+                                  <img
+                                    src={img}
+                                    alt={`preview ${index + 1}`}
+                                    style={{
+                                      width: "80px",
+                                      height: "80px",
+                                      objectFit: "cover",
+                                      borderRadius: "6px",
+                                      border: "1px solid #ddd"
+                                    }}
+                                  />
+                                ) : (
+                                  <ImageHandler
+                                    src={img}
+                                    alt={`preview ${index + 1}`}
+                                    width={80}
+                                    height={80}
+                                    className="border"
+                                  />
+                                )}
+                                <button
+                                  type="button"
+                                  className="btn btn-danger btn-sm position-absolute top-0 end-0"
+                                  onClick={() => removeImage(index)}
+                                  style={{ borderRadius: "50%", padding: "0 6px" }}
+                                >
+                                  ×
+                                </button>
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
-                      <small className="text-muted d-block mt-2">
-                        Selected: {previews.length} images
+                      <small className={`text-muted d-block mt-2 ${previews.length < 1 ? 'text-danger' : ''}`}>
+                        Selected: {previews.length} images {previews.length < 1 ? '(Minimum 1 required)' : ''}
                       </small>
                     </div>
                   </div>
@@ -668,7 +731,7 @@ const EditProduct = () => {
                 <button
                   type="submit"
                   className="btn btn-primary px-4"
-                  disabled={loading}
+                  disabled={loading || previews.length < 1}
                 >
                   {loading ? (
                     <>
@@ -682,6 +745,9 @@ const EditProduct = () => {
                     </>
                   )}
                 </button>
+                {previews.length < 1 && (
+                  <small className="text-danger ms-2">Add at least 1 image</small>
+                )}
               </div>
             </form>
           </div>

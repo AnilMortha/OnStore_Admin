@@ -65,7 +65,12 @@ const AddProduct = () => {
     try {
       const response = await httpClient.get(`/subcategories/get_by_category.php?category_id=${categoryId}`);
       if (response.data.status) {
-        setSubCategories(response.data.data);
+        // Updated: Use 'id' instead of '_id'
+        const subData = response.data.data.map(item => ({
+          ...item,
+          id: item.id || item._id // Fallback for backward compatibility
+        }));
+        setSubCategories(subData);
       } else {
         setSubCategories([]);
       }
@@ -86,23 +91,34 @@ const AddProduct = () => {
 
   const handleImageChange = (e) => {
     const files = Array.from(e.target.files);
+    
+    // Check total images (existing + new)
     const totalImages = previews.length + files.length;
-
-    if (totalImages < 3) {
-      setMessage(`Minimum 3 images required. Currently: ${totalImages} ❌`);
+    
+    // Check minimum 1 image
+    if (totalImages < 1) {
+      setMessage(`Minimum 1 image required. Currently selected: ${totalImages} ❌`);
+      setFieldErrors({ ...fieldErrors, images: "Minimum 1 image required" });
+      e.target.value = "";
       return;
     }
-
+    
+    // Check maximum 5 images
     if (totalImages > 5) {
-      setMessage(`Maximum 5 images allowed. Currently: ${totalImages} ❌`);
+      setMessage(`Maximum 5 images allowed. Currently selected: ${totalImages} ❌`);
+      setFieldErrors({ ...fieldErrors, images: "Maximum 5 images allowed" });
+      e.target.value = "";
       return;
     }
 
+    // Add new images
     setImages([...images, ...files]);
     const newPreviews = files.map((file) => URL.createObjectURL(file));
     setPreviews([...previews, ...newPreviews]);
     setMessage("");
-    setFieldErrors({});
+    setFieldErrors({ ...fieldErrors, images: "" });
+    
+    e.target.value = "";
   };
 
   const removeImage = (index) => {
@@ -115,8 +131,12 @@ const AddProduct = () => {
     setImages(newImages);
     setPreviews(newPreviews);
     
-    if (newPreviews.length < 3) {
-      setMessage("Minimum 3 images required ❌");
+    if (newPreviews.length < 1) {
+      setMessage(`Minimum 1 image required. Currently: ${newPreviews.length} ❌`);
+      setFieldErrors({ ...fieldErrors, images: "Minimum 1 image required" });
+    } else {
+      setMessage("");
+      setFieldErrors({ ...fieldErrors, images: "" });
     }
   };
 
@@ -134,7 +154,7 @@ const AddProduct = () => {
     if (!unit) errors.unit = "Unit is required";
     if (!category) errors.category = "Category is required";
     if (!subCategory) errors.subCategory = "Subcategory is required";
-    if (previews.length < 3) errors.images = "Minimum 3 images required";
+    if (previews.length < 1) errors.images = "Minimum 1 image required";
 
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
@@ -173,22 +193,25 @@ const AddProduct = () => {
       formData.append("isFeatured", isFeatured ? 1 : 0);
       formData.append("tags", tags);
 
-      // Append images
-     images.forEach((image) => {
-      formData.append("images", image);  // Changed from "images[]" to "images"
-    });
+      images.forEach((image) => {
+        formData.append("images[]", image);
+      });
 
-    // Debug - check what's being sent
-    console.log("Sending images:", images.length);
-    for (let pair of formData.entries()) {
-      if (pair[0] === 'images') {
-        console.log("Image field:", pair[0], pair[1].name);
+      console.log("=== Form Data Debug ===");
+      console.log("Total images:", images.length);
+      for (let pair of formData.entries()) {
+        if (pair[0] === 'images[]') {
+          console.log("Image:", pair[1].name);
+        } else {
+          console.log(pair[0], ":", pair[1]);
+        }
       }
-    }
 
-    const response = await httpClient.post("/products/add.php", formData, {
-      headers: { "Content-Type": "multipart/form-data" }
-    });
+      const response = await httpClient.post("/products/add.php", formData, {
+        headers: { 
+          "Content-Type": "multipart/form-data",
+        }
+      });
 
       if (response.data.status) {
         setMessage("Product Added Successfully ✅");
@@ -246,8 +269,8 @@ const AddProduct = () => {
                       >
                         <option value="">-- Select Category --</option>
                         {categories.map((cat) => (
-                          <option key={cat._id} value={cat._id}>
-                            {cat.Categoryname}
+                          <option key={cat.id || cat._id} value={cat.id || cat._id}>
+                            {cat.Categoryname || cat.category_name}
                           </option>
                         ))}
                       </select>
@@ -268,8 +291,8 @@ const AddProduct = () => {
                       >
                         <option value="">-- Select Sub Category --</option>
                         {subCategories.map((sub) => (
-                          <option key={sub._id} value={sub._id}>
-                            {sub.SubCategoryname}
+                          <option key={sub.id || sub._id} value={sub.id || sub._id}>
+                            {sub.SubCategoryname || sub.subcategory_name}
                           </option>
                         ))}
                       </select>
@@ -519,7 +542,7 @@ const AddProduct = () => {
                     <div className="card-header bg-light">
                       <h6 className="mb-0">
                         Product Images <span className="text-danger">*</span>
-                        <small className="text-muted ms-2">(Min 3, Max 5)</small>
+                        <small className="text-muted ms-2">(Min 1, Max 5)</small>
                       </h6>
                     </div>
                     <div className="card-body">
@@ -561,8 +584,8 @@ const AddProduct = () => {
                           ))}
                         </div>
                       )}
-                      <small className="text-muted d-block mt-2">
-                        Selected: {previews.length} images
+                      <small className={`text-muted d-block mt-2 ${previews.length < 1 ? 'text-danger' : ''}`}>
+                        Selected: {previews.length} images {previews.length < 1 ? '(Minimum 1 required)' : ''}
                       </small>
                     </div>
                   </div>
@@ -609,7 +632,7 @@ const AddProduct = () => {
                 <button
                   type="submit"
                   className="btn btn-primary px-4"
-                  disabled={loading}
+                  disabled={loading || previews.length < 1}
                 >
                   {loading ? (
                     <>
@@ -623,6 +646,9 @@ const AddProduct = () => {
                     </>
                   )}
                 </button>
+                {previews.length < 1 && (
+                  <small className="text-danger ms-2">Add at least 1 image</small>
+                )}
               </div>
             </form>
           </div>

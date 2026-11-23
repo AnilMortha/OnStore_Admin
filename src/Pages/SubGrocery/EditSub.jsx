@@ -84,7 +84,7 @@ const EditSub = () => {
   const getImageUrl = (imagePath) => {
     if (!imagePath) return "";
     if (imagePath.startsWith("http")) return imagePath;
-    return `https://easternbaysolar.com/onstores_apis/api/${imagePath}`; // Change this URL
+    return `https://onstores.in/onstores_apis/api/${imagePath}`; // Change this URL
   };
 
   const handleImageChange = (e) => {

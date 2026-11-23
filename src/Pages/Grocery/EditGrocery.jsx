@@ -69,7 +69,7 @@ const EditGrocery = () => {
         // Set image preview if exists
         if (data.image) {
           setExistingImage(data.image);
-          setPreview(`https://easternbaysolar.com/onstores_apis/api/${data.image}`);
+          setPreview(`https://onstores.in/onstores_apis/api/${data.image}`);
         }
       } else {
         setMessage("Failed to fetch category data ❌");

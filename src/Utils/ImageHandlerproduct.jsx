@@ -1,6 +1,6 @@
 import React from "react";
 
-const BASE_URL = "https://easternbaysolar.com/onstores_apis/";
+const BASE_URL = "https://onstores.in/onstores_apis/";
 
 const ImageHandler = ({
   src,

@@ -47,7 +47,7 @@ const List = () => {
     if (!imagePath) return "https://via.placeholder.com/60?text=No+Image";
     if (imagePath.startsWith("http")) return imagePath;
     // Update the base URL to match your project structure
-    return `https://easternbaysolar.com/onstores_apis/api/${imagePath}`; // Change this URL as per your setup
+    return `https://onstores.in/onstores_apis/api/${imagePath}`; // Change this URL as per your setup
   };
   
 
